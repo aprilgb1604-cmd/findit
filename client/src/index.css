@@ -1,0 +1,19 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --color-brand: #dc2626;
+  --color-brand-dark: #b91c1c;
+  --color-brand-light: #fef2f2;
+  --color-ink: #111111;
+
+  --color-indigo-50: #fef2f2;
+  --color-indigo-100: #fee2e2;
+  --color-indigo-500: #ef4444;
+  --color-indigo-600: #dc2626;
+  --color-indigo-700: #b91c1c;
+}
+
+html { scroll-behavior: smooth; }
+body { background: #fafafa; color: #111111; }

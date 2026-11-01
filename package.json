@@ -1,0 +1,18 @@
+{
+  "name": "findit",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+"scripts": {
+  "install-all": "npm install --prefix server && npm install --prefix client",
+  "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+  "build": "npm install --prefix client --include=dev && npm run build --prefix client && npm install --prefix server",
+  "start": "node server/server.js"
+},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
+}
