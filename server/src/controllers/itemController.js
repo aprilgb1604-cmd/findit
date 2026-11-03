@@ -4,6 +4,7 @@ const Notification = require('../models/Notification')
 const { uploadImage } = require('../config/cloudinary')
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const Claim = require('../models/Claim')
 const STATUSES = ['Lost', 'Found', 'Claimed', 'Returned']
 
 // PUBLIC: verified items only, with search + filters
@@ -219,5 +220,100 @@ exports.updateStatus = async (req, res) => {
     res.json(item)
   } catch (err) {
     res.status(500).json({ message: err.message })
+  }
+}
+
+/**
+ * FINDER: Directly return a Found item in person.
+ * No online ownership claim is required.
+ */
+exports.returnInPerson = async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({
+        message: 'Item not found',
+      })
+    }
+
+    // Only the original finder may mark their own
+    // active Found item as returned.
+    const item = await Item.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        reportedBy: req.user._id,
+        type: 'found',
+        status: 'Found',
+        verified: true,
+        hidden: { $ne: true },
+      },
+      {
+        $set: {
+          status: 'Returned',
+          resolvedAt: new Date(),
+          resolutionMethod: 'in_person',
+        },
+      },
+      { new: true }
+    )
+
+    if (!item) {
+      return res.status(409).json({
+        message:
+          'Only the original finder can return an active, verified Found item.',
+      })
+    }
+
+    // Close any outstanding online ownership claims.
+    const pending = await Claim.find({
+      item: item._id,
+      kind: 'claim',
+      status: 'Pending',
+    }).select('_id claimant')
+
+    if (pending.length) {
+      await Claim.updateMany(
+        {
+          _id: { $in: pending.map(c => c._id) },
+          status: 'Pending',
+        },
+        {
+          $set: { status: 'Rejected' },
+        }
+      )
+
+      await Notification.insertMany(
+        pending.map(c => ({
+          user: c.claimant,
+          message:
+            `"${item.title}" was returned directly ` +
+            'to its owner in person, so this ' +
+            'online claim was closed.',
+        }))
+      )
+    }
+
+    // Notify admins/staff.
+    const User = require('../models/User')
+
+    const staff = await User.find({
+      role: { $in: ['admin', 'staff'] },
+    }).select('_id')
+
+    if (staff.length) {
+      await Notification.insertMany(
+        staff.map(person => ({
+          user: person._id,
+          message:
+            `The finder marked "${item.title}" ` +
+            'as returned directly in person.',
+        }))
+      )
+    }
+
+    return res.json(item)
+  } catch (err) {
+    return res.status(500).json({
+      message: err.message,
+    })
   }
 }

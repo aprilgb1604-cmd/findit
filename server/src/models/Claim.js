@@ -10,6 +10,11 @@ const claimSchema = new mongoose.Schema(
     photoUrl: { type: String, default: '' },
     status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    // Confirmation by the original finder, NOT final admin approval.
+    finderDecision: { type: String, enum: ['Pending', 'Confirmed', 'Disputed'], default: 'Pending' },
+    finderDecisionAt: { type: Date },
+    // Date the finder confirmed the item was physically returned
+    handedOverAt: { type: Date, default: null },
   },
   { timestamps: true }
 )

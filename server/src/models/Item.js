@@ -19,6 +19,11 @@ const itemSchema = new mongoose.Schema(
     rejected: { type: Boolean, default: false },
     hidden: { type: Boolean, default: false }, // admin took a public item offline
     resolvedAt: { type: Date }, // set when the item becomes Claimed or Returned
+    resolutionMethod: {
+  type: String,
+  enum: ['in_person', 'online_claim'],
+  default: null,
+},
   },
   { timestamps: true }
 )

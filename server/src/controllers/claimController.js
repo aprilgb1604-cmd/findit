@@ -17,8 +17,8 @@ const notifyStaff = async (message) => {
 exports.createClaim = async (req, res) => {
   try {
     const { itemId, proof } = req.body
-    if (!itemId || !proof) {
-      return res.status(400).json({ message: 'Item and proof are required' })
+    if (!itemId || typeof proof !== 'string' || !proof.trim()) {
+      return res.status(400).json({ message: 'Item and written proof are required' })
     }
     if (!mongoose.isValidObjectId(itemId)) {
       return res.status(404).json({ message: 'Item not found' })
@@ -43,8 +43,22 @@ exports.createClaim = async (req, res) => {
       return res.status(400).json({ message: 'You already have a pending claim on this item' })
     }
 
-    const claim = await Claim.create({ item: itemId, claimant: req.user._id, kind: 'claim', proof })
-    await notifyStaff(`${req.user.name} submitted a claim for "${item.title}". Please review it.`)
+    // A photo supports a claim but is not required; written proof is mandatory.
+    let photoUrl = ''
+    if (req.file) {
+      try {
+        photoUrl = await uploadImage(req.file.buffer)
+      } catch (err) {
+        return res.status(500).json({ message: 'Photo upload failed. Check your Cloudinary settings.' })
+      }
+    }
+
+    const claim = await Claim.create({ item: itemId, claimant: req.user._id, kind: 'claim', proof: proof.trim(), photoUrl })
+    await Notification.create({
+      user: item.reportedBy,
+      message: `Someone submitted an ownership claim for "${item.title}". Review the details on its item page.`,
+    })
+    await notifyStaff(`${req.user.name} submitted a claim for "${item.title}". Awaiting finder confirmation.`)
     res.status(201).json(claim)
   } catch (err) {
     res.status(500).json({ message: err.message })
@@ -132,6 +146,146 @@ exports.getAllClaims = async (req, res) => {
     res.status(500).json({ message: err.message })
   }
 }
+
+// FINDER: view ownership claims made against FOUND items they personally reported.
+exports.getClaimsToConfirm = async (req, res) => {
+  try {
+    const items = await Item.find({ reportedBy: req.user._id, type: 'found' }).select('_id')
+    const claims = await Claim.find({ item: { $in: items.map(i => i._id) }, kind: 'claim' })
+      .populate('item', 'title status reportedBy')
+      .populate('claimant', 'name')
+      .sort({ createdAt: -1 })
+    res.json(claims)
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+}
+
+
+exports.decideFinderClaim = async (req, res) => {
+  try {
+    const { decision } = req.body
+
+    if (!['Confirmed', 'Disputed'].includes(decision)) {
+      return res.status(400).json({
+        message: 'Invalid confirmation decision',
+      })
+    }
+
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({
+        message: 'Claim not found',
+      })
+    }
+
+    const claim = await Claim.findById(req.params.id)
+      .populate('item')
+
+    if (!claim || !claim.item || claim.kind !== 'claim') {
+      return res.status(404).json({
+        message: 'Claim not found',
+      })
+    }
+
+    // Only the person who reported finding the item
+    // is allowed to confirm its handover.
+    if (
+      String(claim.item.reportedBy) !==
+      String(req.user._id)
+    ) {
+      return res.status(403).json({
+        message: 'Only the original finder can confirm this claim',
+      })
+    }
+
+    if (
+      claim.status !== 'Pending' ||
+      claim.item.status !== 'Found'
+    ) {
+      return res.status(409).json({
+        message: 'This claim is no longer open',
+      })
+    }
+
+    if (
+      claim.finderDecision &&
+      claim.finderDecision !== 'Pending'
+    ) {
+      return res.status(409).json({
+        message: 'You have already reviewed this claim',
+      })
+    }
+
+    const now = new Date()
+
+    const changes = {
+      finderDecision: decision,
+      finderDecisionAt: now,
+    }
+
+    // A confirmed decision now means that the finder
+    // verified the details AND handed over the item.
+    if (decision === 'Confirmed') {
+      changes.handedOverAt = now
+    }
+
+    // Atomically prevent duplicate finder decisions.
+    const updated = await Claim.findOneAndUpdate(
+      {
+        _id: claim._id,
+        status: 'Pending',
+        finderDecision: { $in: ['Pending', null] },
+      },
+      {
+        $set: changes,
+      },
+      {
+        new: true,
+      }
+    )
+
+    if (!updated) {
+      return res.status(409).json({
+        message: 'This claim has already been reviewed',
+      })
+    }
+
+    if (decision === 'Confirmed') {
+      await Notification.create({
+        user: claim.claimant,
+        message:
+          `The finder confirmed that your ownership details ` +
+          `matched and "${claim.item.title}" was handed over. ` +
+          `Final admin approval is pending.`,
+      })
+
+      await notifyStaff(
+        `${req.user.name} verified the claimant and confirmed ` +
+        `physical handover of "${claim.item.title}". ` +
+        `Please complete the admin review.`
+      )
+    } else {
+      await Notification.create({
+        user: claim.claimant,
+        message:
+          `The finder disputed your ownership claim for ` +
+          `"${claim.item.title}". An admin will review it.`,
+      })
+
+      await notifyStaff(
+        `${req.user.name} disputed an ownership claim for ` +
+        `"${claim.item.title}".`
+      )
+    }
+
+    return res.json(updated)
+  } catch (err) {
+    return res.status(500).json({
+      message: err.message,
+    })
+  }
+}
+
 
 // OWNER (or staff): who found my lost item? Only approved reports, and only for the owner
 exports.getFinderContacts = async (req, res) => {
@@ -223,6 +377,17 @@ exports.reviewClaim = async (req, res) => {
       return res.status(403).json({ message: 'You cannot review your own submission' })
     }
 
+    // Found-item ownership claims require explicit confirmation from the original finder
+    // before staff can approve. A disputed claim may still be rejected by staff.
+    if (claim.kind === 'claim' && status === 'Approved') {
+      if (claim.finderDecision !== 'Confirmed') {
+        return res.status(409).json({ message: 'The original finder must confirm ownership before approval' })
+      }
+      if (claim.item.status !== 'Found') {
+        return res.status(409).json({ message: 'The item is no longer available to claim' })
+      }
+    }
+
     claim.status = status
     claim.reviewedBy = req.user._id
     await claim.save()
@@ -276,5 +441,64 @@ exports.reviewClaim = async (req, res) => {
     res.json(claim)
   } catch (err) {
     res.status(500).json({ message: err.message })
+  }
+}
+
+/**
+ * CLAIMANT: Get the original finder's contact details.
+ *
+ * Only the person whose ownership claim was approved
+ * by an admin can access this information.
+ *
+ * Existing Lost-item and Found-item logic is unchanged.
+ */
+exports.getApprovedFinderContact = async (req, res) => {
+  try {
+    const { claimId } = req.params
+
+    // Validate claim ID
+    if (!mongoose.isValidObjectId(claimId)) {
+      return res.status(404).json({
+        message: 'Claim not found',
+      })
+    }
+
+    // Find only an approved ownership claim belonging
+    // to the currently logged-in user.
+    const claim = await Claim.findOne({
+      _id: claimId,
+      claimant: req.user._id,
+      kind: 'claim',
+      status: 'Approved',
+    }).populate('item', 'title type reportedBy')
+
+    if (!claim || !claim.item || claim.item.type !== 'found') {
+      return res.status(404).json({
+        message: 'Approved claim not found',
+      })
+    }
+
+    // Find the person who originally reported this item.
+    const finder = await User.findById(
+      claim.item.reportedBy
+    ).select('name email')
+
+    if (!finder) {
+      return res.status(404).json({
+        message: 'Finder contact information unavailable',
+      })
+    }
+
+    return res.status(200).json({
+      itemTitle: claim.item.title,
+      finder: {
+        name: finder.name,
+        email: finder.email,
+      },
+    })
+  } catch (err) {
+    return res.status(500).json({
+      message: 'Could not retrieve finder contact details',
+    })
   }
 }

@@ -14,5 +14,10 @@ router.patch('/:id/verify', protect, authorize('admin', 'staff'), c.verifyItem)
 router.patch('/:id/reject', protect, authorize('admin', 'staff'), c.rejectItem)
 router.patch('/:id/hide', protect, authorize('admin', 'staff'), c.hideItem)
 router.patch('/:id/status', protect, authorize('admin', 'staff'), c.updateStatus)
+router.patch(
+  '/:id/returned-in-person',
+  protect,
+  c.returnInPerson
+)
 
 module.exports = router

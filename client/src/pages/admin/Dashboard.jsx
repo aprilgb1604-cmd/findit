@@ -228,13 +228,14 @@ export default function Dashboard() {
                 <th className="p-3">Item</th>
                 <th className="p-3">Submitted by</th>
                 <th className="p-3">Proof / message</th>
+                <th className="p-3">Finder check</th>
                 <th className="p-3">Status</th>
                 <th className="p-3">Action</th>
               </tr>
             </thead>
             <tbody>
               {claims.length === 0 && (
-                <tr><td colSpan={5} className="p-6 text-center text-gray-400">No claims yet.</td></tr>
+                <tr><td colSpan={6} className="p-6 text-center text-gray-400">No claims yet.</td></tr>
               )}
               {claims.map((c) => (
                 <tr key={c._id} className="border-t border-gray-200">
@@ -261,13 +262,16 @@ export default function Dashboard() {
                       </a>
                     )}
                   </td>
+                  <td className="p-3 text-xs font-semibold">
+                    {c.kind === 'found_report' ? 'Not applicable' : (c.finderDecision || 'Pending')}
+                  </td>
                   <td className="p-3">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${claimColors[c.status]}`}>{c.status}</span>
                   </td>
                   <td className="p-3">
                     {c.status === 'Pending' ? (
                       <div className="flex gap-2">
-                        <button onClick={() => review(c._id, 'Approved')} className="bg-ink text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-emerald-600 active:scale-95 transition">
+                        <button disabled={c.kind === 'claim' && c.finderDecision !== 'Confirmed'} title={c.kind === 'claim' && c.finderDecision !== 'Confirmed' ? 'Finder confirmation required' : 'Approve'} onClick={() => review(c._id, 'Approved')} className="bg-ink text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-emerald-600 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed">
                           Approve
                         </button>
                         <button onClick={() => review(c._id, 'Rejected')} className="bg-white border border-gray-300 text-xs font-semibold px-3 py-1.5 rounded-lg hover:border-brand hover:text-brand active:scale-95 transition">
