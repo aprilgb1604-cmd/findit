@@ -772,7 +772,7 @@ const returnInPerson = async () => {
                   >
                     {busy
                       ? 'Confirming...'
-                      : "✅ Correct Owner — I've Handed Over the Item"}
+                      : "✅ Correct Ownership Details"}
                   </button>
                 ) : (
                   <p className="text-sm text-gray-500">
