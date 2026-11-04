@@ -409,22 +409,6 @@ const returnInPerson = async () => {
             >
               📎 Upload photo
             </label>
-
-            <input
-              id="claim-camera"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={onClaimPhoto}
-              className="sr-only"
-            />
-
-            <label
-              htmlFor="claim-camera"
-              className="inline-flex items-center gap-2 cursor-pointer bg-gray-100 text-ink text-sm font-semibold px-4 py-2 rounded-lg hover:bg-gray-200 transition"
-            >
-              📷 Take photo
-            </label>
           </div>
 
           {claimPhoto && (
@@ -686,8 +670,7 @@ const returnInPerson = async () => {
 
             <p className="text-sm text-gray-600">
               Review the evidence submitted by each claimant.
-              If their details match and you have physically
-              returned the item, confirm the handover below.
+              If their details match your email id would be share for handover.
             </p>
 
             {finderClaims.length === 0 && (
@@ -738,13 +721,12 @@ const returnInPerson = async () => {
                 {c.finderDecision === 'Confirmed' ? (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                     <p className="font-semibold text-green-800">
-                      ✅ Handover confirmed
+                      ✅ Details confirmed
                     </p>
 
                     <p className="text-xs text-green-700 mt-1">
                       You confirmed that the ownership
-                      details matched and the item was
-                      handed over.
+                      details matched.
                       Admin status: {c.status}.
                     </p>
                   </div>
@@ -758,7 +740,7 @@ const returnInPerson = async () => {
                     disabled={busy}
                     onClick={() => {
                       const confirmed = window.confirm(
-                        `Have you checked ${c.claimant?.name || 'the claimant'}'s ownership details AND physically handed over the item?\n\nOnly confirm after BOTH have happened.`
+                        `Have you checked ${c.claimant?.name || 'the claimant'}'s ownership details and those are correct. If so, click 'Confirm'.`
                       )
 
                       if (confirmed) {

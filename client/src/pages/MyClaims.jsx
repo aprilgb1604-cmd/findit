@@ -233,11 +233,10 @@ export default function MyClaims() {
 
                     <div>
                       <p className="font-bold text-emerald-800">
-                        ✅ Claim Approved!
+                        ✅ Your claim has been reviewed!
                       </p>
                       <p className="text-sm text-emerald-700 mt-1">
-                        Your ownership claim has been approved
-                        by the admin.
+You can now contact the finder to arrange collection of your item
                       </p>
                     </div>
 
@@ -286,11 +285,18 @@ export default function MyClaims() {
                       </p>
                     )}
 
-                    <p className="text-xs text-gray-600">
-                      Contact the finder to arrange a safe handover.
-                      Approval does not mean the item has
-                      already been returned.
-                    </p>
+
+<div className="flex items-start gap-2 mt-3 text-xs text-gray-500">
+  <span className="flex-shrink-0 w-4 h-4 rounded-full border border-gray-400 flex items-center justify-center text-[10px] font-bold text-gray-500">
+    i
+  </span>
+  <p>
+    Please verify the item and arrange collection directly
+    with the finder. FindIt helps connect you but cannot
+    guarantee a successful return.
+  </p>
+</div>
+
 
                   </div>
                 )}
